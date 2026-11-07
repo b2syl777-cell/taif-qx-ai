@@ -490,3 +490,163 @@ if _prompt_decl >= 0 and _prompt_req > _prompt_decl:
     if not _prompt_segment.rstrip().endswith('\"\"\"'):
         _prompt_source = _prompt_source[:_prompt_req] + '            \"\"\"\n\n' + _prompt_source[_prompt_req:]
         _prompt_file.write_text(_prompt_source)
+
+
+# User-selected real/OTC market and custom expiry/timeframe controls.
+from pathlib import Path as _UiPath
+_model_ui = _UiPath("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/model/TradingModels.kt")
+_model_ui_text = _model_ui.read_text()
+_model_ui_text = _model_ui_text.replace('FOREX("Forex")', 'FOREX("Real Market (Forex)")')
+_model_ui.write_text(_model_ui_text)
+
+_home_ui = _UiPath("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/ui/screens/HomeScreen.kt")
+_home_ui_text = _home_ui.read_text()
+if "import android.content.Context" not in _home_ui_text:
+    _home_ui_text = _home_ui_text.replace("package com.taif.qxai.ui.screens\n", "package com.taif.qxai.ui.screens\n\nimport android.content.Context\n", 1)
+if "import androidx.compose.ui.platform.LocalContext" not in _home_ui_text:
+    _home_ui_text = _home_ui_text.replace("import androidx.compose.ui.Modifier\n", "import androidx.compose.ui.Modifier\nimport androidx.compose.ui.platform.LocalContext\n", 1)
+
+_old_state = '''    var selectedMarket by remember { mutableStateOf(MarketType.OTC) }
+    var selectedTimeframe by remember { mutableStateOf("1M") }'''
+_new_state = '''    val appContext = LocalContext.current
+    val prefs = remember { appContext.getSharedPreferences("taif_qx_prefs", Context.MODE_PRIVATE) }
+    val initialMarket = remember {
+        runCatching { MarketType.valueOf(prefs.getString("selected_market_type", "OTC") ?: "OTC") }
+            .getOrDefault(MarketType.OTC)
+    }
+    var selectedMarket by remember { mutableStateOf(initialMarket) }
+    var selectedTimeframe by remember { mutableStateOf(prefs.getString("selected_timeframe", "1M") ?: "1M") }
+    var customTimeframe by remember { mutableStateOf("") }
+    val customTimeframes = remember {
+        mutableStateListOf<String>().apply {
+            addAll(prefs.getStringSet("custom_timeframes", emptySet()) ?: emptySet())
+        }
+    }
+    LaunchedEffect(selectedMarket, selectedTimeframe) {
+        prefs.edit()
+            .putString("selected_market_type", selectedMarket.name)
+            .putString("selected_timeframe", selectedTimeframe)
+            .apply()
+    }'''
+if _old_state in _home_ui_text:
+    _home_ui_text = _home_ui_text.replace(_old_state, _new_state, 1)
+elif "var customTimeframe by remember" not in _home_ui_text:
+    raise SystemExit("HomeScreen state anchor missing; refusing UI patch.")
+
+_home_ui_text = _home_ui_text.replace(
+    'listOf("1M", "2M", "5M").forEach { tf ->',
+    'listOf("5s", "10s", "15s", "30s").forEach { tf ->',
+    1
+)
+_custom_ui = '''                Text(
+                    text = "MINUTE PRESETS",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = TextSecondary
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("1M", "2M", "5M").forEach { tf ->
+                        FilterChip(
+                            selected = selectedTimeframe == tf,
+                            onClick = { selectedTimeframe = tf },
+                            label = { Text(tf, fontWeight = FontWeight.Bold) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = NeonGreen,
+                                selectedLabelColor = DarkBackground
+                            )
+                        )
+                    }
+                }
+
+                Text("CUSTOM EXPIRY (examples: 45s, 3m)", color = TextSecondary, fontSize = 12.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = customTimeframe,
+                        onValueChange = { customTimeframe = it.filter { ch -> ch.isDigit() || ch == 's' || ch == 'S' || ch == 'm' || ch == 'M' }.take(4) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        label = { Text("e.g. 45s or 3m") }
+                    )
+                    Button(
+                        onClick = {
+                            val candidate = customTimeframe.trim().lowercase()
+                            if (Regex("^[1-9][0-9]{0,2}(s|m)$").matches(candidate)) {
+                                if (!customTimeframes.contains(candidate)) customTimeframes.add(candidate)
+                                prefs.edit().putStringSet("custom_timeframes", customTimeframes.toSet()).apply()
+                                selectedTimeframe = candidate
+                                customTimeframe = ""
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CyberCyan, contentColor = DarkBackground)
+                    ) { Text("ADD") }
+                }
+                if (customTimeframes.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        customTimeframes.forEach { tf ->
+                            FilterChip(
+                                selected = selectedTimeframe == tf,
+                                onClick = { selectedTimeframe = tf },
+                                label = { Text(tf, fontWeight = FontWeight.Bold) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = NeonGreen,
+                                    selectedLabelColor = DarkBackground
+                                )
+                            )
+                        }
+                    }
+                }
+'''
+_anchor = '''        // AI Architecture Info Card'''
+if "CUSTOM EXPIRY (examples: 45s, 3m)" not in _home_ui_text:
+    if _anchor not in _home_ui_text:
+        raise SystemExit("HomeScreen custom timeframe insertion point missing.")
+    _home_ui_text = _home_ui_text.replace(_anchor, _custom_ui + "\n" + _anchor, 1)
+_home_ui.write_text(_home_ui_text)
+print("Added explicit Real Market selector label, fast expiry presets, custom timeframe entry, and persisted selection.")
+
+# Make the floating scanner use the selected market/timeframe, not hardcoded EUR/USD or 1M.
+_scan_ui = _UiPath("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/service/FloatingScannerService.kt")
+_scan_ui_text = _scan_ui.read_text()
+_pref_anchor = '''                val apiKey = sharedPrefs.getString("gemini_api_key", "") ?: ""
+                val geminiRepo = GeminiAnalysisRepository { apiKey }'''
+_pref_new = '''                val apiKey = sharedPrefs.getString("gemini_api_key", "") ?: ""
+                val selectedMarketName = sharedPrefs.getString("selected_market_type", "OTC") ?: "OTC"
+                val selectedTimeframe = sharedPrefs.getString("selected_timeframe", "1M") ?: "1M"
+                val geminiRepo = GeminiAnalysisRepository { apiKey }'''
+if _pref_anchor in _scan_ui_text:
+    _scan_ui_text = _scan_ui_text.replace(_pref_anchor, _pref_new, 1)
+elif "val selectedMarketName = sharedPrefs.getString" not in _scan_ui_text:
+    raise SystemExit("Floating scanner preferences anchor missing.")
+
+_scan_ui_text = _scan_ui_text.replace(
+    'geminiRepo.analyzeChartImage(bitmap, "AUTO_DETECT", "DETECT_FROM_SCREENSHOT", "AUTO_DETECT")',
+    'geminiRepo.analyzeChartImage(bitmap, selectedMarketName, "DETECT_FROM_SCREENSHOT", selectedTimeframe)',
+    1
+)
+_market_block = '''                val marketType = when {
+                    detectedMarket.contains("OTC", true) -> MarketType.OTC
+                    detectedPair.contains("BTC", true) || detectedPair.contains("ETH", true) -> MarketType.CRYPTO
+                    else -> MarketType.FOREX
+                }'''
+_market_replacement = '''                val marketType = runCatching { MarketType.valueOf(selectedMarketName) }
+                    .getOrDefault(MarketType.OTC)'''
+if _market_block in _scan_ui_text:
+    _scan_ui_text = _scan_ui_text.replace(_market_block, _market_replacement, 1)
+elif "MarketType.valueOf(selectedMarketName)" not in _scan_ui_text:
+    raise SystemExit("Floating scanner market selection block missing.")
+_scan_ui_text = _scan_ui_text.replace(
+    'timeframe = detectedTimeframe',
+    'timeframe = selectedTimeframe',
+    1
+)
+_scan_ui.write_text(_scan_ui_text)
+print("Floating scan now applies the saved market and selected expiry/timeframe to Gemini and result display.")
