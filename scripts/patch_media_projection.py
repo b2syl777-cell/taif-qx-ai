@@ -135,11 +135,18 @@ if "private var pendingScan = false" not in fs:
     if insert_before not in fs:
         raise SystemExit("FloatingScannerService onBind insertion point not found")
     fs = fs.replace(insert_before, start_command + insert_before, 1)
-    fs = fs.replace(
-        "    companion object {",
-        "    companion object {\n        const val ACTION_SCAN = \"com.taif.qxai.action.SCAN_NOW\"",
-        1
-    )
+    if "companion object {" in fs:
+        fs = fs.replace(
+            "    companion object {",
+            "    companion object {\n        const val ACTION_SCAN = \"com.taif.qxai.action.SCAN_NOW\"",
+            1
+        )
+    else:
+        fs = fs.replace(
+            "class FloatingScannerService : Service() {",
+            "class FloatingScannerService : Service() {\n    companion object { const val ACTION_SCAN = \"com.taif.qxai.action.SCAN_NOW\" }",
+            1
+        )
 service.write_text(fs)
 
 print("Added dashboard SCAN NOW button and queued scan action.")
