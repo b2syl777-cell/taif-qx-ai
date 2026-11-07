@@ -721,3 +721,57 @@ if "Independent Local and Gemini results (visible separately)." not in _scanner_
     _scanner_file.write_text(_scanner_text)
 
 print("Strict Local+Gemini agreement enabled; independent engine results are displayed.")
+
+
+# Make the floating signal card easier to read and show the real Gemini failure reason.
+from pathlib import Path as _DiagPath
+_diag_service = _DiagPath("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/service/FloatingScannerService.kt")
+_diag_text = _diag_service.read_text()
+
+# Include a short, sanitized Gemini error in the card rather than only a generic NO RESPONSE.
+_diag_old = """                val finalSignal = DualEngineConsensus.combineResults(
+                    local = localResult,
+                    gemini = geminiResult,
+                    marketType = marketType,
+                    pair = detectedPair,
+                    timeframe = selectedTimeframe
+                )
+                triggerHaptic(finalSignal.finalSignal)
+                showResultCard(finalSignal)
+                if (geminiResult == null) {
+                    val reason = geminiResponse.exceptionOrNull()?.message ?: "Gemini analysis unavailable"
+                    android.widget.Toast.makeText(applicationContext, "Gemini unavailable; screenshot asset cannot be verified. " + reason.take(140), android.widget.Toast.LENGTH_LONG).show()
+                } else if (detectedPair == "Asset not detected in screenshot") {"""
+_diag_new = """                val geminiError = geminiResponse.exceptionOrNull()?.message
+                    ?.replace(apiKey, "[API_KEY_HIDDEN]")
+                    ?.replace(Regex("AIza[A-Za-z0-9_\\-]{20,}"), "[API_KEY_HIDDEN]")
+                    ?.take(260)
+                val combinedSignal = DualEngineConsensus.combineResults(
+                    local = localResult,
+                    gemini = geminiResult,
+                    marketType = marketType,
+                    pair = detectedPair,
+                    timeframe = selectedTimeframe
+                )
+                val finalSignal = if (geminiResult == null) {
+                    combinedSignal.copy(
+                        technicalSummary = combinedSignal.technicalSummary +
+                            "\\n\\nGEMINI ERROR: " + (geminiError ?: "No response. Check internet, API key, quota, and model access.")
+                    )
+                } else combinedSignal
+                triggerHaptic(finalSignal.finalSignal)
+                showResultCard(finalSignal)
+                if (geminiResult == null) {
+                    android.widget.Toast.makeText(applicationContext, "Gemini failed. The card now shows the reason.", android.widget.Toast.LENGTH_LONG).show()
+                } else if (detectedPair == "Asset not detected in screenshot") {"""
+if (s.includes(_diag_old)) s=s.replace(_diag_old,_diag_new);
+else if (!s.includes("GEMINI ERROR:")) throw new Error("Gemini diagnostic insertion anchor missing");
+# Enlarge card and make directions explicit.
+s=s.replace("(320 * density).toInt()", "(350 * density).toInt()");
+s=s.replace('SignalType.CALL -> "▲ CALL (${signal.confidence}%)"', 'SignalType.CALL -> "▲ CALL / UP (${signal.confidence}%)"');
+s=s.replace('SignalType.PUT -> "▼ PUT (${signal.confidence}%)"', 'SignalType.PUT -> "▼ PUT / DOWN (${signal.confidence}%)"');
+s=s.replace('textSize = 24f\n                typeface = Typeface.DEFAULT_BOLD', 'textSize = 30f\n                typeface = Typeface.DEFAULT_BOLD');
+# Slightly increase detail text size to readable.
+s=s.replace('textSize = 11f\n            }\n            addView(summaryText)', 'textSize = 12f\n            }\n            addView(summaryText)');
+_diag_service.write_text(_diag_text)
+print("Added visible Gemini API failure details and larger CALL/UP and PUT/DOWN labels.")
