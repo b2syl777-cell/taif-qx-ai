@@ -477,3 +477,16 @@ if _marker in _ss:
     _ss = _ss.replace(_marker, _add, 1)
 _service.write_text(_ss)
 print("Added screenshot asset detection, expanded visible-indicator analysis, and one fresh scan per tap.")
+
+
+# Ensure the generated Kotlin raw prompt string is explicitly closed before request construction.
+from pathlib import Path as _PromptPath
+_prompt_file = _PromptPath("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/ai/GeminiAnalysisRepository.kt")
+_prompt_source = _prompt_file.read_text()
+_prompt_req = _prompt_source.find("            val requestJson = JsonObject()")
+_prompt_decl = _prompt_source.find("            val prompt = \"\"\"")
+if _prompt_decl >= 0 and _prompt_req > _prompt_decl:
+    _prompt_segment = _prompt_source[_prompt_decl:_prompt_req]
+    if not _prompt_segment.rstrip().endswith('\"\"\"'):
+        _prompt_source = _prompt_source[:_prompt_req] + '            \"\"\"\n\n' + _prompt_source[_prompt_req:]
+        _prompt_file.write_text(_prompt_source)
