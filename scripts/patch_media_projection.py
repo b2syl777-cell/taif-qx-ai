@@ -397,9 +397,7 @@ _beg = _ss.find("    private fun captureAndProcess() {")
 _fin = _ss.find("    private fun triggerHaptic(", _beg)
 if _beg < 0 or _fin < 0:
     raise SystemExit("captureAndProcess() boundaries not found.")
-_new_capture = '''    private var activeScanJob: Job? = null
-
-    private fun captureAndProcess() {
+_new_capture = '''    private fun captureAndProcess() {
         // Latest tap wins: cancel an older scan and immediately start fresh.
         activeScanJob?.cancel()
         activeScanJob = serviceScope.launch {
