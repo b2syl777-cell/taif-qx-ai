@@ -744,7 +744,7 @@ _diag_old = """                val finalSignal = DualEngineConsensus.combineResu
                 } else if (detectedPair == "Asset not detected in screenshot") {"""
 _diag_new = """                val geminiError = geminiResponse.exceptionOrNull()?.message
                     ?.replace(apiKey, "[API_KEY_HIDDEN]")
-                    ?.replace(Regex("AIza[A-Za-z0-9_\\-]{20,}"), "[API_KEY_HIDDEN]")
+                    ?.replace(Regex("AIza[A-Za-z0-9_-]{20,}"), "[API_KEY_HIDDEN]")
                     ?.take(260)
                 val combinedSignal = DualEngineConsensus.combineResults(
                     local = localResult,
