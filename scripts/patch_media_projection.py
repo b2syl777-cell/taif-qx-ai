@@ -401,7 +401,7 @@ if "private var activeScanJob: Job? = null" not in _ss:
 if "private val scanMutex" not in _ss:
     _ss = _ss.replace(
         "    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())\n    private var activeScanJob: Job? = null",
-        "    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())\n    private val scanMutex = kotlinx.coroutines.sync.Mutex()"
+        "    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())\n    private var activeScanJob: Job? = null\n    private val scanMutex = kotlinx.coroutines.sync.Mutex()"
     )
 _beg = _ss.find("    private fun captureAndProcess() {")
 _fin = _ss.find("    private fun triggerHaptic(", _beg)
