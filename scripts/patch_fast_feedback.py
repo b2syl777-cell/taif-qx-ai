@@ -96,6 +96,22 @@ _parallel_func = r'''    private fun captureAndProcess() {
                     technicalSummary = finalSignal.technicalSummary + "\nGemini error: " + reason
                 )
             }
+            // Show each engine's raw direction independently; colors describe direction only, not certainty.
+            val localDirectionLabel = localResult.signal.name.uppercase()
+            val localDirectionColor = when {
+                localDirectionLabel.contains("CALL") || localDirectionLabel.contains("UP") -> Color.parseColor("#00C853")
+                localDirectionLabel.contains("PUT") || localDirectionLabel.contains("DOWN") -> Color.parseColor("#FF1744")
+                else -> Color.parseColor("#9E9E9E")
+            }
+            val geminiDirectionLabel = geminiResult?.signal?.toString()?.uppercase() ?: "NO SIGNAL"
+            val geminiDirectionColor = when {
+                geminiDirectionLabel.contains("CALL") || geminiDirectionLabel.contains("UP") -> Color.parseColor("#00C853")
+                geminiDirectionLabel.contains("PUT") || geminiDirectionLabel.contains("DOWN") -> Color.parseColor("#FF1744")
+                else -> Color.parseColor("#9E9E9E")
+            }
+            showSimpleResult("LOCAL ENGINE", "$localDirectionLabel • ${localResult.confidence}%", localDirectionColor)
+            showSimpleResult("GEMINI ENGINE", "$geminiDirectionLabel • ${geminiResult?.confidence ?: 0}%", geminiDirectionColor)
+
             triggerHaptic(finalSignal.finalSignal)
             showResultCard(finalSignal)
         }
