@@ -39,20 +39,18 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          root = Path('project/taif-qx-ai-android/app/src/main/java')
-          for p in root.rglob('*.kt'):
-              s = p.read_text(errors='ignore')
-              keys = ('Timeframe', 'timeframe', 'Market Selector', 'MarketType', 'FloatingScannerService')
-              if any(k in s for k in keys):
-                  print('\n===== FILE:', p, '=====')
-                  lines = s.splitlines()
-                  hits = [i for i, line in enumerate(lines) if any(k in line for k in keys)]
-                  shown = set()
-                  for i in hits[:12]:
-                      for j in range(max(0, i-5), min(len(lines), i+9)):
-                          if j not in shown:
-                              print(str(j+1) + ': ' + lines[j])
-                              shown.add(j)
+          root = Path('project/taif-qx-ai-android/app/src/main/java/com/taif/qxai')
+          targets = {
+              'ui/screens/HomeScreen.kt': (1, 245),
+              'service/FloatingScannerService.kt': (175, 250),
+              'MainActivity.kt': (1, 190),
+          }
+          for rel, (start, end) in targets.items():
+              p = root / rel
+              lines = p.read_text(errors='ignore').splitlines()
+              print('\\n===== SOURCE:', rel, '=====')
+              for i in range(start-1, min(end, len(lines))):
+                  print(str(i+1) + ': ' + lines[i])
           PY
       - name: Apply Android screen-capture compatibility fix
         run: python3 scripts/patch_media_projection.py
