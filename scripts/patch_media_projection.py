@@ -774,12 +774,12 @@ _diag_text = _diag_text.replace("(320 * density).toInt()", "(350 * density).toIn
 _diag_text = _diag_text.replace('SignalType.CALL -> "▲ CALL (${signal.confidence}%)"', 'SignalType.CALL -> "▲ CALL / UP (${signal.confidence}%)"')
 _diag_text = _diag_text.replace('SignalType.PUT -> "▼ PUT (${signal.confidence}%)"', 'SignalType.PUT -> "▼ PUT / DOWN (${signal.confidence}%)"')
 _diag_text = _diag_text.replace(
-    "textSize = 24f\\n                typeface = Typeface.DEFAULT_BOLD",
-    "textSize = 30f\\n                typeface = Typeface.DEFAULT_BOLD"
+    "textSize = 24f\n                typeface = Typeface.DEFAULT_BOLD",
+    "textSize = 30f\n                typeface = Typeface.DEFAULT_BOLD"
 )
 _diag_text = _diag_text.replace(
-    "textSize = 11f\\n            }\\n            addView(summaryText)",
-    "textSize = 12f\\n            }\\n            addView(summaryText)"
+    "textSize = 11f\n            }\n            addView(summaryText)",
+    "textSize = 12f\n            }\n            addView(summaryText)"
 )
 _diag_service.write_text(_diag_text)
 print("Added visible Gemini API failure details and larger CALL/UP and PUT/DOWN labels.")
