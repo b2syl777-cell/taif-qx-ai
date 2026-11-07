@@ -742,10 +742,25 @@ _diag_old = """                val finalSignal = DualEngineConsensus.combineResu
                     val reason = geminiResponse.exceptionOrNull()?.message ?: "Gemini analysis unavailable"
                     android.widget.Toast.makeText(applicationContext, "Gemini unavailable; screenshot asset cannot be verified. " + reason.take(140), android.widget.Toast.LENGTH_LONG).show()
                 } else if (detectedPair == "Asset not detected in screenshot") {"""
-_diag_new = """                val geminiError = geminiResponse.exceptionOrNull()?.message
+_diag_new = """                val rawGeminiError = geminiResponse.exceptionOrNull()?.message
                     ?.replace(apiKey, "[API_KEY_HIDDEN]")
                     ?.replace(Regex("AIza[A-Za-z0-9_-]{20,}"), "[API_KEY_HIDDEN]")
-                    ?.take(260)
+                    ?.take(500)
+                val geminiError = when {
+                    rawGeminiError?.contains("429") == true ||
+                        rawGeminiError?.contains("quota", ignoreCase = true) == true ||
+                        rawGeminiError?.contains("RESOURCE_EXHAUSTED", ignoreCase = true) == true ->
+                        "Gemini quota/rate limit reached (HTTP 429). Wait for quota reset, or use an API key from a project with available Gemini quota. Change key in app Settings, then tap Scan again. This is a quota issue, not a chart-reading error."
+                    rawGeminiError?.contains("403") == true ->
+                        "Gemini access denied (403). Check API key, project permissions, and billing/quota settings in Google AI Studio."
+                    rawGeminiError?.contains("400") == true ->
+                        "Gemini request rejected (400). Check selected model/API compatibility and request settings."
+                    rawGeminiError?.contains("503") == true ->
+                        "Gemini service is busy (503). Wait briefly and scan again."
+                    rawGeminiError?.contains("timeout", ignoreCase = true) == true ->
+                        "Gemini request timed out. Check internet and scan again."
+                    else -> rawGeminiError ?: "No response. Check internet, API key, quota, and model access."
+                }
                 val combinedSignal = DualEngineConsensus.combineResults(
                     local = localResult,
                     gemini = geminiResult,
@@ -762,7 +777,7 @@ _diag_new = """                val geminiError = geminiResponse.exceptionOrNull(
                 triggerHaptic(finalSignal.finalSignal)
                 showResultCard(finalSignal)
                 if (geminiResult == null) {
-                    android.widget.Toast.makeText(applicationContext, "Gemini failed. The card now shows the reason.", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(applicationContext, "Gemini failed. Check the card; wait/retry or update API key in Settings.", android.widget.Toast.LENGTH_LONG).show()
                 } else if (detectedPair == "Asset not detected in screenshot") {"""
 if _diag_old in _diag_text:
     _diag_text = _diag_text.replace(_diag_old, _diag_new, 1)
