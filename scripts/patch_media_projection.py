@@ -111,15 +111,15 @@ service = Path("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/servi
 fs = service.read_text()
 if "private var pendingScan = false" not in fs:
     fs = fs.replace(
-        "    private var isBound = false\\n",
-        "    private var isBound = false\\n    private var pendingScan = false\\n"
+        "    private var isBound = false" + chr(10),
+        "    private var isBound = false" + chr(10) + "    private var pendingScan = false" + chr(10)
     )
     fs = fs.replace(
-        "            isBound = true\\n",
-        "            isBound = true\\n            if (pendingScan) { pendingScan = false; onScanTriggered() }\\n",
+        "            isBound = true" + chr(10),
+        "            isBound = true" + chr(10) + "            if (pendingScan) { pendingScan = false; onScanTriggered() }" + chr(10),
         1
     )
-    insert_before = "    override fun onBind(intent: Intent?): IBinder? = null\\n"
+    insert_before = "    override fun onBind(intent: Intent?): IBinder? = null" + chr(10)
     start_command = """    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_SCAN) {
             if (isBound && screenCaptureService != null) onScanTriggered()
@@ -136,7 +136,7 @@ if "private var pendingScan = false" not in fs:
 if "const val ACTION_SCAN" not in fs:
     fs = fs.replace(
         "class FloatingScannerService : Service() {",
-        "class FloatingScannerService : Service() {\\n    companion object { const val ACTION_SCAN = \\"com.taif.qxai.action.SCAN_NOW\\" }",
+        "class FloatingScannerService : Service() {" + chr(10) + '    companion object { const val ACTION_SCAN = "com.taif.qxai.action.SCAN_NOW" }',
         1
     )
 service.write_text(fs)
