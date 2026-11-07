@@ -415,7 +415,7 @@ _new_capture = '''    private var activeScanJob: Job? = null
                 }
                 if (bitmap == null) {
                     showSimpleResult("CAPTURE FAILED", "No screen frame arrived. Re-enable screen capture and try again.", Color.parseColor("#FF1744"))
-                    return@withLock
+                    return@launch
                 }
                 val localResult = withContext(Dispatchers.Default) { LocalChartAnalyzer.analyzeBitmap(bitmap) }
                 val sharedPrefs = getSharedPreferences("taif_qx_prefs", Context.MODE_PRIVATE)
