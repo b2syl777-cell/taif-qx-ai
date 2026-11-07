@@ -713,7 +713,7 @@ _engine_ui = """            // Independent Local and Gemini results (visible sep
             addView(engineBreakdown)
 
 """
-_card_anchor = "            // Summary\\n            val summaryText = TextView(this@FloatingScannerService).apply {"
+_card_anchor = "            val summaryText = TextView(this@FloatingScannerService).apply {"
 if "Independent Local and Gemini results (visible separately)." not in _scanner_text:
     if _card_anchor not in _scanner_text:
         raise SystemExit("Result card summary insertion point not found")
