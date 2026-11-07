@@ -390,7 +390,7 @@ if "import kotlinx.coroutines.sync.withLock" not in _ss:
     _ss = _ss.replace("import kotlinx.coroutines.*\n", "import kotlinx.coroutines.*\nimport kotlinx.coroutines.sync.withLock\n")
 if "private val scanMutex" not in _ss:
     _ss = _ss.replace(
-        "    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())",
+        "    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())\n    private var activeScanJob: Job? = null",
         "    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())\n    private val scanMutex = kotlinx.coroutines.sync.Mutex()"
     )
 _beg = _ss.find("    private fun captureAndProcess() {")
