@@ -650,3 +650,74 @@ _scan_ui_text = _scan_ui_text.replace(
 )
 _scan_ui.write_text(_scan_ui_text)
 print("Floating scan now applies the saved market and selected expiry/timeframe to Gemini and result display.")
+
+
+# Strict two-engine mode: never issue a directional signal from Local-only or Gemini-only.
+# Both engines must independently return the same direction; otherwise display NO_SIGNAL.
+from pathlib import Path as _StrictPath
+_consensus_file = _StrictPath("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/ai/DualEngineConsensus.kt")
+_consensus_text = _consensus_file.read_text()
+_guard = """        // Strict dual confirmation: require both engines and matching directional signals.
+        if (gemini == null || local.signal == SignalType.NO_SIGNAL ||
+            gemini.signal == SignalType.NO_SIGNAL || local.signal != gemini.signal) {
+            val reason = when {
+                gemini == null -> "Gemini analysis failed or unavailable. Local result alone is not enough."
+                local.signal != gemini.signal -> "Engine disagreement: Local ${local.signal} vs Gemini ${gemini.signal}. Wait for agreement."
+                else -> "Both engines did not confirm a clear direction."
+            }
+            return FinalTradeSignal(
+                finalSignal = SignalType.NO_SIGNAL,
+                confidence = 0,
+                marketType = marketType,
+                pair = pair,
+                timeframe = timeframe,
+                geminiAnalysis = gemini,
+                localAnalysis = local,
+                patterns = (local.patterns + (gemini?.patterns ?: emptyList())).distinct(),
+                mtgPlan = MartingalePlan(
+                    step = 0,
+                    advice = "NO TRADE — both Local and Gemini must agree. Do not use MTG to recover losses.",
+                    multiplier = 0.0,
+                    recommendedAmount = 0.0
+                ),
+                technicalSummary = reason,
+                keyLevels = KeyLevels(support = "N/A", resistance = "N/A")
+            )
+        }
+
+"""
+if "Strict dual confirmation: require both engines" not in _consensus_text:
+    _anchor = "        // If Gemini is available"
+    if _anchor not in _consensus_text:
+        raise SystemExit("DualEngineConsensus insertion point not found")
+    _consensus_text = _consensus_text.replace(_anchor, _guard + _anchor, 1)
+    _consensus_file.write_text(_consensus_text)
+
+# Show both independent engine outputs in the floating result card.
+_scanner_file = _StrictPath("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/service/FloatingScannerService.kt")
+_scanner_text = _scanner_file.read_text()
+_engine_ui = """            // Independent Local and Gemini results (visible separately).
+            val engineBreakdown = TextView(this@FloatingScannerService).apply {
+                val local = signal.localAnalysis
+                val gemini = signal.geminiAnalysis
+                text = "LOCAL: ${local.signal} (${local.confidence}%)\\n${local.summary}\\n\\n" +
+                    if (gemini == null) {
+                        "GEMINI: FAILED / NO RESPONSE\\nA combined directional signal is blocked."
+                    } else {
+                        "GEMINI: ${gemini.signal} (${gemini.confidence}%)\\n${gemini.summary}"
+                    }
+                setTextColor(Color.parseColor("#D3DEEA"))
+                textSize = 10.5f
+                setPadding(0, (8 * density).toInt(), 0, (8 * density).toInt())
+            }
+            addView(engineBreakdown)
+
+"""
+_card_anchor = "            // Summary\\n            val summaryText = TextView(this@FloatingScannerService).apply {"
+if "Independent Local and Gemini results (visible separately)." not in _scanner_text:
+    if _card_anchor not in _scanner_text:
+        raise SystemExit("Result card summary insertion point not found")
+    _scanner_text = _scanner_text.replace(_card_anchor, _engine_ui + _card_anchor, 1)
+    _scanner_file.write_text(_scanner_text)
+
+print("Strict Local+Gemini agreement enabled; independent engine results are displayed.")
