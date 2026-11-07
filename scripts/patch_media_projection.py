@@ -388,6 +388,16 @@ _service = _P("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/servic
 _ss = _service.read_text()
 if "import kotlinx.coroutines.sync.withLock" not in _ss:
     _ss = _ss.replace("import kotlinx.coroutines.*\n", "import kotlinx.coroutines.*\nimport kotlinx.coroutines.sync.withLock\n")
+# Ensure activeScanJob exists once at class scope; capture patches reference it.
+if "private var activeScanJob: Job? = null" not in _ss:
+    _service_scope_anchor = "    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())\n"
+    if _service_scope_anchor not in _ss:
+        raise SystemExit("FloatingScannerService serviceScope anchor missing.")
+    _ss = _ss.replace(
+        _service_scope_anchor,
+        _service_scope_anchor + "    private var activeScanJob: Job? = null\n",
+        1
+    )
 if "private val scanMutex" not in _ss:
     _ss = _ss.replace(
         "    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())\n    private var activeScanJob: Job? = null",
