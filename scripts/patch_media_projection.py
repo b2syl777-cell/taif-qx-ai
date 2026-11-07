@@ -397,10 +397,12 @@ _beg = _ss.find("    private fun captureAndProcess() {")
 _fin = _ss.find("    private fun triggerHaptic(", _beg)
 if _beg < 0 or _fin < 0:
     raise SystemExit("captureAndProcess() boundaries not found.")
-_new_capture = '''    private fun captureAndProcess() {
-        // Every tap is queued and gets its own fresh screenshot and analysis.
-        serviceScope.launch {
-            scanMutex.withLock {
+_new_capture = '''    private var activeScanJob: Job? = null
+
+    private fun captureAndProcess() {
+        // Latest tap wins: cancel an older scan and immediately start fresh.
+        activeScanJob?.cancel()
+        activeScanJob = serviceScope.launch {
                 showSimpleResult("SCANNING...", "Reading this screen and detecting its market label...", Color.parseColor("#00E5FF"))
                 val bitmap = withContext(Dispatchers.IO) {
                     var captured: Bitmap? = null
@@ -450,7 +452,6 @@ _new_capture = '''    private fun captureAndProcess() {
                 } else if (detectedPair == "Asset not detected in screenshot") {
                     android.widget.Toast.makeText(applicationContext, "Market label is not readable in this screenshot.", android.widget.Toast.LENGTH_LONG).show()
                 }
-            }
         }
     }
 
