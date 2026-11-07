@@ -33,9 +33,7 @@ _begin = _parallel_src.find("    private fun captureAndProcess() {")
 _end = _parallel_src.find("    private fun triggerHaptic(", _begin)
 if _begin < 0 or _end < 0:
     raise SystemExit("Could not locate scan function for parallel Gemini patch.")
-_parallel_func = r'''    private var activeScanJob: Job? = null
-
-    private fun captureAndProcess() {
+_parallel_func = r'''    private fun captureAndProcess() {
         activeScanJob?.cancel()
         activeScanJob = serviceScope.launch {
             showSimpleResult("SCANNING...", "Capturing screen; Local and Gemini will start together.", Color.parseColor("#00E5FF"))
