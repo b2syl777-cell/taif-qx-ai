@@ -798,3 +798,22 @@ _diag_text = _diag_text.replace(
 )
 _diag_service.write_text(_diag_text)
 print("Added visible Gemini API failure details and larger CALL/UP and PUT/DOWN labels.")
+
+
+# Floating overlay should be compact: show only the final direction/status.
+# Detailed Local/Gemini breakdown and diagnostics belong in the in-app History.
+from pathlib import Path as _CompactPath
+_compact_file = _CompactPath("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/service/FloatingScannerService.kt")
+_compact = _compact_file.read_text()
+_compact_anchor = "            addView(summaryText)"
+_compact_code = """            // Keep the floating overlay compact; details are retained in signal/history data.
+            engineBreakdown.visibility = View.GONE
+            indicatorText.visibility = View.GONE
+            summaryText.visibility = View.GONE
+"""
+if "Keep the floating overlay compact" not in _compact:
+    if _compact_anchor not in _compact:
+        raise SystemExit("Compact floating overlay anchor missing")
+    _compact = _compact.replace(_compact_anchor, _compact_anchor + "\n" + _compact_code, 1)
+_compact_file.write_text(_compact)
+print("Floating overlay now shows only the main signal; detailed analysis stays in history.")
