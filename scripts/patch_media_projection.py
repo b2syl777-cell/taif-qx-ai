@@ -192,3 +192,91 @@ repo.write_text(gs)
 print("Gemini failures will now be shown instead of silently using Local AI; response parsing is more robust.")
 
 print("Added dashboard SCAN NOW button, action constant, queued scan action, and Gemini API diagnostics.")
+
+
+# Reliability patch: wait briefly for a fresh MediaProjection frame and always show
+# a visible status/error message instead of silently appearing to do nothing.
+from pathlib import Path as _Path
+_fp = _Path("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/service/FloatingScannerService.kt")
+_fs = _fp.read_text()
+
+_start = _fs.find("    private fun captureAndProcess() {")
+_end = _fs.find("    private fun triggerHaptic(", _start)
+if _start < 0 or _end < 0:
+    raise SystemExit("Could not locate captureAndProcess() safely.")
+
+_new_func = """    private fun captureAndProcess() {
+        serviceScope.launch {
+            showSimpleResult("SCANNING...", "Capturing chart and starting AI analysis. Please wait.", Color.parseColor("#00E5FF"))
+            val bitmap = withContext(Dispatchers.IO) {
+                var captured: Bitmap? = null
+                repeat(18) {
+                    captured = screenCaptureService?.captureCurrentScreen()
+                    if (captured != null) return@withContext captured
+                    delay(180)
+                }
+                captured
+            }
+            if (bitmap == null) {
+                showSimpleResult(
+                    "SCREEN NOT READY",
+                    "No fresh screen frame received. Reopen Taif QX AI, allow screen capture, then scan again.",
+                    Color.parseColor("#FF1744")
+                )
+                return@launch
+            }
+
+            val localResult = withContext(Dispatchers.Default) {
+                LocalChartAnalyzer.analyzeBitmap(bitmap)
+            }
+
+            val sharedPrefs = getSharedPreferences("taif_qx_prefs", Context.MODE_PRIVATE)
+            val apiKey = sharedPrefs.getString("gemini_api_key", "") ?: ""
+            val geminiRepo = GeminiAnalysisRepository { apiKey }
+            val geminiResponse = withContext(Dispatchers.IO) {
+                geminiRepo.analyzeChartImage(bitmap, "OTC", "EUR/USD (OTC)", "1M")
+            }
+            val geminiResult = geminiResponse.getOrNull()
+
+            val finalSignal = DualEngineConsensus.combineResults(
+                local = localResult,
+                gemini = geminiResult,
+                marketType = MarketType.OTC,
+                pair = "EUR/USD (OTC)",
+                timeframe = "1M"
+            )
+
+            triggerHaptic(finalSignal.finalSignal)
+            showResultCard(finalSignal)
+            if (geminiResult == null) {
+                val reason = geminiResponse.exceptionOrNull()?.message ?: "Gemini API did not return a result."
+                android.widget.Toast.makeText(
+                    applicationContext,
+                    "Local analysis shown; Gemini unavailable: " + reason.take(180),
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+"""
+_fs = _fs[:_start] + _new_func + _fs[_end:]
+
+# The previous implementation of showSimpleResult() was empty, so scan failures
+# were completely invisible. Replace it with a visible Android toast.
+_old_simple = """    private fun showSimpleResult(title: String, message: String, color: Int) {
+        // Simple error or info notification card
+    }"""
+_new_simple = """    private fun showSimpleResult(title: String, message: String, color: Int) {
+        android.widget.Toast.makeText(
+            applicationContext,
+            "$title\\n$message",
+            android.widget.Toast.LENGTH_LONG
+        ).show()
+    }"""
+if _old_simple in _fs:
+    _fs = _fs.replace(_old_simple, _new_simple, 1)
+elif "private fun showSimpleResult(title: String, message: String, color: Int)" not in _fs:
+    raise SystemExit("Could not locate showSimpleResult() safely.")
+_fp.write_text(_fs)
+print("Added scan-frame retries and visible scan/API status messages.")
