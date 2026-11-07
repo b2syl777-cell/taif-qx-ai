@@ -141,4 +141,54 @@ if "const val ACTION_SCAN" not in fs:
     )
 service.write_text(fs)
 
-print("Added dashboard SCAN NOW button, action constant, and queued scan action.")
+
+# Do not silently fall back to Local AI when Gemini API fails.
+service = Path("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/service/FloatingScannerService.kt")
+fs = service.read_text()
+old_call = '''            val geminiResult = withContext(Dispatchers.IO) {
+                geminiRepo.analyzeChartImage(bitmap, "OTC", "EUR/USD (OTC)", "1M").getOrNull()
+            }'''
+new_call = '''            val geminiResponse = withContext(Dispatchers.IO) {
+                geminiRepo.analyzeChartImage(bitmap, "OTC", "EUR/USD (OTC)", "1M")
+            }
+            val geminiResult = geminiResponse.getOrElse { error ->
+                showSimpleResult(
+                    "GEMINI API FAILED",
+                    error.message ?: "Gemini request failed. Check internet and API access.",
+                    Color.parseColor("#FF1744")
+                )
+                return@launch
+            }'''
+if old_call in fs:
+    fs = fs.replace(old_call, new_call, 1)
+elif "val geminiResponse = withContext(Dispatchers.IO)" not in fs:
+    raise SystemExit("Could not find Gemini result block; refusing to patch.")
+service.write_text(fs)
+
+# Gemini 3.x responses can contain non-text parts before the answer; select the first text part.
+repo = Path("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/ai/GeminiAnalysisRepository.kt")
+gs = repo.read_text()
+old_extract = '''            val textOutput = candidates[0].asJsonObject
+                .getAsJsonObject("content")
+                .getAsJsonArray("parts")[0].asJsonObject
+                .get("text").asString'''
+new_extract = '''            val responseParts = candidates[0].asJsonObject
+                .getAsJsonObject("content")
+                .getAsJsonArray("parts")
+            val textOutput = responseParts
+                .firstOrNull { part ->
+                    part.isJsonObject && part.asJsonObject.has("text") &&
+                        !part.asJsonObject.get("text").isJsonNull
+                }
+                ?.asJsonObject
+                ?.get("text")
+                ?.asString
+                ?: return@withContext Result.failure(Exception("Gemini returned no readable text. Check API/model response."))'''
+if old_extract in gs:
+    gs = gs.replace(old_extract, new_extract, 1)
+elif "val responseParts = candidates[0]" not in gs:
+    raise SystemExit("Could not find Gemini response parser; refusing to patch.")
+repo.write_text(gs)
+print("Gemini failures will now be shown instead of silently using Local AI; response parsing is more robust.")
+
+print("Added dashboard SCAN NOW button, action constant, queued scan action, and Gemini API diagnostics.")
