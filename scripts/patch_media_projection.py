@@ -280,3 +280,200 @@ elif "private fun showSimpleResult(title: String, message: String, color: Int)" 
     raise SystemExit("Could not locate showSimpleResult() safely.")
 _fp.write_text(_fs)
 print("Added scan-frame retries and visible scan/API status messages.")
+
+
+# Advanced chart reading: screenshot asset detection, expanded indicators and one scan per tap.
+from pathlib import Path as _P
+_model = _P("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/model/TradingModels.kt")
+_ms = _model.read_text()
+_ms = _ms.replace(
+    '    val bollingerPosition: String = "INSIDE"\n)',
+    '''    val bollingerPosition: String = "INSIDE",
+    val adxValue: Double = 0.0,
+    val atrState: String = "NOT_VISIBLE",
+    val stochasticK: Double = 50.0,
+    val vwapPosition: String = "NOT_VISIBLE",
+    val volumeTrend: String = "NOT_VISIBLE",
+    val ichimokuTrend: String = "NOT_VISIBLE",
+    val fibonacciZone: String = "NOT_VISIBLE"
+)'''
+)
+_ms = _ms.replace(
+    '    val indicators: IndicatorData = IndicatorData()\n)',
+    '''    val indicators: IndicatorData = IndicatorData(),
+    val assetName: String = "Asset not detected",
+    val marketName: String = "Market not detected",
+    val detectedTimeframe: String = "Timeframe not detected"
+)'''
+)
+_model.write_text(_ms)
+
+_repo = _P("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/ai/GeminiAnalysisRepository.kt")
+_rs = _repo.read_text()
+_prompt_start = _rs.find('            val prompt = """')
+_prompt_end = _rs.find('            """.trimIndent()', _prompt_start)
+if _prompt_start < 0 or _prompt_end < 0:
+    raise SystemExit("Gemini prompt block not found.")
+_prompt = '''            val prompt = """
+                You are a careful visual chart-reading assistant. Analyze ONLY what is genuinely visible.
+                Identify the exact asset/pair and market label printed in the screenshot. Never assume EUR/USD.
+                If the label is cropped or unreadable return "Asset not detected". Read visible timeframe or return "Timeframe not detected".
+                Examine latest candles, swing highs/lows and trend structure. Check EMA 9/21/50/200, RSI 14,
+                MACD line/signal/histogram, Bollinger squeeze/expansion, VWAP, ATR volatility, ADX strength,
+                Stochastic K/D, Ichimoku cloud, volume spikes, support/resistance, breakout/retest,
+                Fibonacci retracement only when swing anchors are visible.
+                Identify bullish/bearish engulfing, hammer, hanging man, shooting star, morning/evening star,
+                doji, dragonfly/gr avestone doji, inside bar, pin bar, marubozu, tweezer top/bottom,
+                three soldiers/crows, candle body/wick ratio and rejection wicks.
+                Do not invent numeric readings or report indicators that are not visible; use NOT_VISIBLE.
+                Do not infer news or real-time prices from an image. CALL/PUT only if multiple visible factors agree;
+                otherwise NO_SIGNAL. Confidence is a cautious visual score, not win probability.
+                Return JSON only:
+                {"signal":"CALL|PUT|NO_SIGNAL","confidence":0,
+                 "assetName":"exact visible asset or Asset not detected",
+                 "marketName":"exact visible market label or Market not detected",
+                 "detectedTimeframe":"visible timeframe or Timeframe not detected",
+                 "patterns":["..."],"summary":"evidence-based reasoning",
+                 "emaTrend":"BULLISH|BEARISH|NEUTRAL|NOT_VISIBLE","rsiValue":50,
+                 "macdCondition":"BULLISH|BEARISH|NEUTRAL|NOT_VISIBLE",
+                 "bollingerPosition":"UPPER|LOWER|MIDDLE|NOT_VISIBLE",
+                 "adxValue":0,"atrState":"LOW|NORMAL|HIGH|NOT_VISIBLE",
+                 "stochasticK":50,"vwapPosition":"ABOVE|BELOW|AT|NOT_VISIBLE",
+                 "volumeTrend":"RISING|FALLING|AVERAGE|NOT_VISIBLE",
+                 "ichimokuTrend":"BULLISH|BEARISH|NEUTRAL|NOT_VISIBLE",
+                 "fibonacciZone":"38.2%|50%|61.8%|NOT_VISIBLE"}
+            '''.rstrip()
+_rs = _rs[:_prompt_start] + _prompt + _rs[_prompt_end+len('            """.trimIndent()'):]
+_old_text = '''            val textOutput = candidates[0].asJsonObject
+                .getAsJsonObject("content")
+                .getAsJsonArray("parts")[0].asJsonObject
+                .get("text").asString'''
+if _old_text in _rs:
+    _rs = _rs.replace(_old_text, '''            val responseParts = candidates[0].asJsonObject.getAsJsonObject("content").getAsJsonArray("parts")
+            val textOutput = responseParts.firstOrNull {
+                it.isJsonObject && it.asJsonObject.has("text") && !it.asJsonObject.get("text").isJsonNull
+            }?.asJsonObject?.get("text")?.asString
+                ?: return@withContext Result.failure(Exception("Gemini returned no readable text."))''', 1)
+_rs = _rs.replace(
+    '            val bollingerPosition = parsedOutput.get("bollingerPosition")?.asString ?: "INSIDE"\n',
+    '''            val bollingerPosition = parsedOutput.get("bollingerPosition")?.asString ?: "NOT_VISIBLE"
+            val assetName = parsedOutput.get("assetName")?.asString ?: "Asset not detected"
+            val marketName = parsedOutput.get("marketName")?.asString ?: "Market not detected"
+            val detectedTimeframe = parsedOutput.get("detectedTimeframe")?.asString ?: "Timeframe not detected"
+            fun jsonString(key: String) = parsedOutput.get(key)?.takeIf { !it.isJsonNull }?.asString ?: "NOT_VISIBLE"
+            fun jsonDouble(key: String, fallback: Double = 0.0) = parsedOutput.get(key)?.takeIf { !it.isJsonNull }?.asDouble ?: fallback
+'''
+)
+_rs = _rs.replace(
+    '''                        bollingerPosition = bollingerPosition
+                    )
+                )''',
+    '''                        bollingerPosition = bollingerPosition,
+                        adxValue = jsonDouble("adxValue"),
+                        atrState = jsonString("atrState"),
+                        stochasticK = jsonDouble("stochasticK", 50.0),
+                        vwapPosition = jsonString("vwapPosition"),
+                        volumeTrend = jsonString("volumeTrend"),
+                        ichimokuTrend = jsonString("ichimokuTrend"),
+                        fibonacciZone = jsonString("fibonacciZone")
+                    ),
+                    assetName = assetName,
+                    marketName = marketName,
+                    detectedTimeframe = detectedTimeframe
+                )'''
+)
+_repo.write_text(_rs)
+
+_service = _P("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/service/FloatingScannerService.kt")
+_ss = _service.read_text()
+if "import kotlinx.coroutines.sync.withLock" not in _ss:
+    _ss = _ss.replace("import kotlinx.coroutines.*\n", "import kotlinx.coroutines.*\nimport kotlinx.coroutines.sync.withLock\n")
+if "private val scanMutex" not in _ss:
+    _ss = _ss.replace(
+        "    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())",
+        "    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())\n    private val scanMutex = kotlinx.coroutines.sync.Mutex()"
+    )
+_beg = _ss.find("    private fun captureAndProcess() {")
+_fin = _ss.find("    private fun triggerHaptic(", _beg)
+if _beg < 0 or _fin < 0:
+    raise SystemExit("captureAndProcess() boundaries not found.")
+_new_capture = '''    private fun captureAndProcess() {
+        // Every tap is queued and gets its own fresh screenshot and analysis.
+        serviceScope.launch {
+            scanMutex.withLock {
+                showSimpleResult("SCANNING...", "Reading this screen and detecting its market label...", Color.parseColor("#00E5FF"))
+                val bitmap = withContext(Dispatchers.IO) {
+                    var captured: Bitmap? = null
+                    repeat(20) {
+                        captured = screenCaptureService?.captureCurrentScreen()
+                        if (captured != null) return@withContext captured
+                        delay(150)
+                    }
+                    captured
+                }
+                if (bitmap == null) {
+                    showSimpleResult("CAPTURE FAILED", "No screen frame arrived. Re-enable screen capture and try again.", Color.parseColor("#FF1744"))
+                    return@withLock
+                }
+                val localResult = withContext(Dispatchers.Default) { LocalChartAnalyzer.analyzeBitmap(bitmap) }
+                val sharedPrefs = getSharedPreferences("taif_qx_prefs", Context.MODE_PRIVATE)
+                val apiKey = sharedPrefs.getString("gemini_api_key", "") ?: ""
+                val geminiRepo = GeminiAnalysisRepository { apiKey }
+                val geminiResponse = withContext(Dispatchers.IO) {
+                    geminiRepo.analyzeChartImage(bitmap, "AUTO_DETECT", "DETECT_FROM_SCREENSHOT", "AUTO_DETECT")
+                }
+                val geminiResult = geminiResponse.getOrNull()
+                val detectedPair = geminiResult?.assetName
+                    ?.takeIf { it.isNotBlank() && !it.equals("Asset not detected", true) }
+                    ?: "Asset not detected in screenshot"
+                val detectedTimeframe = geminiResult?.detectedTimeframe
+                    ?.takeIf { it.isNotBlank() && !it.equals("Timeframe not detected", true) }
+                    ?: "Timeframe not detected"
+                val detectedMarket = geminiResult?.marketName ?: "Market not detected"
+                val marketType = when {
+                    detectedMarket.contains("OTC", true) -> MarketType.OTC
+                    detectedPair.contains("BTC", true) || detectedPair.contains("ETH", true) -> MarketType.CRYPTO
+                    else -> MarketType.FOREX
+                }
+                val finalSignal = DualEngineConsensus.combineResults(
+                    local = localResult,
+                    gemini = geminiResult,
+                    marketType = marketType,
+                    pair = detectedPair,
+                    timeframe = detectedTimeframe
+                )
+                triggerHaptic(finalSignal.finalSignal)
+                showResultCard(finalSignal)
+                if (geminiResult == null) {
+                    val reason = geminiResponse.exceptionOrNull()?.message ?: "Gemini analysis unavailable"
+                    android.widget.Toast.makeText(applicationContext, "Gemini unavailable; screenshot asset cannot be verified. " + reason.take(140), android.widget.Toast.LENGTH_LONG).show()
+                } else if (detectedPair == "Asset not detected in screenshot") {
+                    android.widget.Toast.makeText(applicationContext, "Market label is not readable in this screenshot.", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+'''
+_ss = _ss[:_beg] + _new_capture + _ss[_fin:]
+_marker = '''            // Summary
+            val summaryText = TextView(this@FloatingScannerService).apply {'''
+_add = '''            // Expanded indicator checklist; NOT_VISIBLE means the screenshot did not expose it.
+            val advanced = signal.geminiAnalysis?.indicators ?: signal.localAnalysis.indicators
+            val indicatorText = TextView(this@FloatingScannerService).apply {
+                text = "EMA: " + advanced.emaTrend + " | RSI: " + advanced.rsiValue + " | MACD: " + advanced.macdCondition + "\\n" +
+                    "Bollinger: " + advanced.bollingerPosition + " | ADX: " + advanced.adxValue + " | ATR: " + advanced.atrState + "\\n" +
+                    "Stochastic K: " + advanced.stochasticK + " | VWAP: " + advanced.vwapPosition + "\\n" +
+                    "Volume: " + advanced.volumeTrend + " | Ichimoku: " + advanced.ichimokuTrend + " | Fib: " + advanced.fibonacciZone
+                setTextColor(Color.parseColor("#B7C8DC"))
+                textSize = 10f
+                setPadding(0, (6 * density).toInt(), 0, (6 * density).toInt())
+            }
+            addView(indicatorText)
+
+            // Summary
+            val summaryText = TextView(this@FloatingScannerService).apply {'''
+if _marker in _ss:
+    _ss = _ss.replace(_marker, _add, 1)
+_service.write_text(_ss)
+print("Added screenshot asset detection, expanded visible-indicator analysis, and one fresh scan per tap.")
