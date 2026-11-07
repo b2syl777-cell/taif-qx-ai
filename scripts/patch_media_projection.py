@@ -764,14 +764,22 @@ _diag_new = """                val geminiError = geminiResponse.exceptionOrNull(
                 if (geminiResult == null) {
                     android.widget.Toast.makeText(applicationContext, "Gemini failed. The card now shows the reason.", android.widget.Toast.LENGTH_LONG).show()
                 } else if (detectedPair == "Asset not detected in screenshot") {"""
-if (s.includes(_diag_old)) s=s.replace(_diag_old,_diag_new);
-else if (!s.includes("GEMINI ERROR:")) throw new Error("Gemini diagnostic insertion anchor missing");
-# Enlarge card and make directions explicit.
-s=s.replace("(320 * density).toInt()", "(350 * density).toInt()");
-s=s.replace('SignalType.CALL -> "▲ CALL (${signal.confidence}%)"', 'SignalType.CALL -> "▲ CALL / UP (${signal.confidence}%)"');
-s=s.replace('SignalType.PUT -> "▼ PUT (${signal.confidence}%)"', 'SignalType.PUT -> "▼ PUT / DOWN (${signal.confidence}%)"');
-s=s.replace('textSize = 24f\n                typeface = Typeface.DEFAULT_BOLD', 'textSize = 30f\n                typeface = Typeface.DEFAULT_BOLD');
-# Slightly increase detail text size to readable.
-s=s.replace('textSize = 11f\n            }\n            addView(summaryText)', 'textSize = 12f\n            }\n            addView(summaryText)');
+if _diag_old in _diag_text:
+    _diag_text = _diag_text.replace(_diag_old, _diag_new, 1)
+elif "GEMINI ERROR:" not in _diag_text:
+    raise SystemExit("Gemini diagnostic insertion anchor missing.")
+
+# Enlarge card and make direction labels explicit.
+_diag_text = _diag_text.replace("(320 * density).toInt()", "(350 * density).toInt()")
+_diag_text = _diag_text.replace('SignalType.CALL -> "▲ CALL (${signal.confidence}%)"', 'SignalType.CALL -> "▲ CALL / UP (${signal.confidence}%)"')
+_diag_text = _diag_text.replace('SignalType.PUT -> "▼ PUT (${signal.confidence}%)"', 'SignalType.PUT -> "▼ PUT / DOWN (${signal.confidence}%)"')
+_diag_text = _diag_text.replace(
+    "textSize = 24f\\n                typeface = Typeface.DEFAULT_BOLD",
+    "textSize = 30f\\n                typeface = Typeface.DEFAULT_BOLD"
+)
+_diag_text = _diag_text.replace(
+    "textSize = 11f\\n            }\\n            addView(summaryText)",
+    "textSize = 12f\\n            }\\n            addView(summaryText)"
+)
 _diag_service.write_text(_diag_text)
 print("Added visible Gemini API failure details and larger CALL/UP and PUT/DOWN labels.")
