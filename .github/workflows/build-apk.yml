@@ -6,6 +6,7 @@ on:
     paths:
       - 'Taif-QX-AI-Ready-for-GitHub.zip'
       - '.github/workflows/build-apk.yml'
+      - 'scripts/**'
   workflow_dispatch:
 
 permissions:
