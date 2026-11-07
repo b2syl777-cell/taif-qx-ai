@@ -111,22 +111,19 @@ service = Path("project/taif-qx-ai-android/app/src/main/java/com/taif/qxai/servi
 fs = service.read_text()
 if "private var pendingScan = false" not in fs:
     fs = fs.replace(
-        "    private var isBound = false\n",
-        "    private var isBound = false\n    private var pendingScan = false\n"
+        "    private var isBound = false\\n",
+        "    private var isBound = false\\n    private var pendingScan = false\\n"
     )
     fs = fs.replace(
-        "            isBound = true\n",
-        "            isBound = true\n            if (pendingScan) { pendingScan = false; onScanTriggered() }\n",
+        "            isBound = true\\n",
+        "            isBound = true\\n            if (pendingScan) { pendingScan = false; onScanTriggered() }\\n",
         1
     )
-    insert_before = "    override fun onBind(intent: Intent?): IBinder? = null\n"
+    insert_before = "    override fun onBind(intent: Intent?): IBinder? = null\\n"
     start_command = """    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_SCAN) {
-            if (isBound && screenCaptureService != null) {
-                onScanTriggered()
-            } else {
-                pendingScan = true
-            }
+            if (isBound && screenCaptureService != null) onScanTriggered()
+            else pendingScan = true
         }
         return START_STICKY
     }
@@ -135,18 +132,13 @@ if "private var pendingScan = false" not in fs:
     if insert_before not in fs:
         raise SystemExit("FloatingScannerService onBind insertion point not found")
     fs = fs.replace(insert_before, start_command + insert_before, 1)
-    if "companion object {" in fs:
-        fs = fs.replace(
-            "    companion object {",
-            "    companion object {\n        const val ACTION_SCAN = \"com.taif.qxai.action.SCAN_NOW\"",
-            1
-        )
-    else:
-        fs = fs.replace(
-            "class FloatingScannerService : Service() {",
-            "class FloatingScannerService : Service() {\n    companion object { const val ACTION_SCAN = \"com.taif.qxai.action.SCAN_NOW\" }",
-            1
-        )
+
+if "const val ACTION_SCAN" not in fs:
+    fs = fs.replace(
+        "class FloatingScannerService : Service() {",
+        "class FloatingScannerService : Service() {\\n    companion object { const val ACTION_SCAN = \\"com.taif.qxai.action.SCAN_NOW\\" }",
+        1
+    )
 service.write_text(fs)
 
-print("Added dashboard SCAN NOW button and queued scan action.")
+print("Added dashboard SCAN NOW button, action constant, and queued scan action.")
