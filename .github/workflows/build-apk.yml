@@ -34,6 +34,9 @@ jobs:
           test -f Taif-QX-AI-Ready-for-GitHub.zip
           unzip -q Taif-QX-AI-Ready-for-GitHub.zip -d project
 
+      - name: Apply Android screen-capture compatibility fix
+        run: python3 scripts/patch_media_projection.py
+
       - name: Build debug APK
         run: gradle --no-daemon -p project/taif-qx-ai-android assembleDebug --stacktrace
 
